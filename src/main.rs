@@ -72,9 +72,11 @@ fn main() {
         }
     }
 
-    let common_text: &str = "name: 🐧 Linux Builds
-on: [push, pull_request]
+    let timeout_default = "25";
+    let timeout_sanitizers = "50";
 
+    let common_text: &str = "name: 🐧 Linux Build TYPE_OF_BUILD_TO_CHANGE
+on: [push, pull_request]
 
 jobs:
   test-projects:
@@ -98,30 +100,30 @@ jobs:
             wget2 unzip -y
           wget2 https://downloads.tuxfamily.org/godotengine/3.2.3/Godot_v3.2.3-stable_x11.64.zip
           unzip Godot_v3.2.3-stable_x11.64.zip
-          mv Godot_v3.2.3-stable_x11.64 godot
-";
+          mv Godot_v3.2.3-stable_x11.64 godot";
+
     let sanitizer_stage = "
       - name: Compile Godot
         run: |
           sudo apt-get install -y build-essential pkg-config libx11-dev libxcursor-dev \
             libxinerama-dev libgl1-mesa-dev libglu-dev libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev yasm \
-            git
+            git scons
           git clone https://github.com/godotengine/godot.git
           cd godot
-          scons tools=yes target=debug use_asan=yes use_ubsan=yes -j2
+          git checkout 3.2
+          scons p=x11 target=debug use_asan=yes use_ubsan=yes -j2
           cd ..
-          mv bin/godot.x11.tools.64s godot
-";
+          mv godot/bin/godot.x11.tools.64s godot";
 
     let text_to_change : &str = "
+
       - name: PROJECT_NAME
         run: |
           echo \"\" > sanitizers_log.txt
-          DRI_PRIME=0 timeout 10s xvfb-run ./godot --audio-driver Dummy -e    --path PROJECT_NAME 2>&1 | tee -a sanitizers_log.txt || true
+          DRI_PRIME=0 timeout TIMEOUT_TO_CHANGEs xvfb-run ./godot --audio-driver Dummy -e    --path PROJECT_NAME 2>&1 | tee -a sanitizers_log.txt || true
           DRI_PRIME=0             xvfb-run ./godot --audio-driver Dummy -e -q --path PROJECT_NAME 2>&1 | tee -a sanitizers_log.txt || true
-          DRI_PRIME=0 timeout 10s xvfb-run ./godot --audio-driver Dummy       --path PROJECT_NAME 2>&1 | tee -a sanitizers_log.txt || true
-          ./check_ci_log.py sanitizers_log.txt
-    ";
+          DRI_PRIME=0 timeout TIMEOUT_TO_CHANGEs xvfb-run ./godot --audio-driver Dummy       --path PROJECT_NAME 2>&1 | tee -a sanitizers_log.txt || true
+          ./check_ci_log.py sanitizers_log.txt";
 
     let excluded_items = [
         "audio/mic_record",        // Leaking Memory even with default Godot binary
@@ -131,7 +133,6 @@ jobs:
         "3d/ik", // Contains some images and loads in more than 10 seconds or just fails without any reason
         "3d/platformer", // Contains some images and loads in more than 10 seconds
         "2d/physics_platformer", // Strange crash, needs to be checked
-        "2d/navigation", // Strange crash, needs to be checked
     ];
 
     let mut file_godot_default =
@@ -139,8 +140,18 @@ jobs:
     let mut file_godot_sanitizers =
         File::create("ci_data_sanitizers.txt").expect("Failed to create file");
 
-    write!(file_godot_default, "{}", common_text).expect("Failed save data to file");
-    write!(file_godot_sanitizers, "{}", common_text).expect("Failed save data to file");
+    write!(
+        file_godot_default,
+        "{}",
+        common_text.replace("TYPE_OF_BUILD_TO_CHANGE", "Default")
+    )
+    .expect("Failed save data to file");
+    write!(
+        file_godot_sanitizers,
+        "{}",
+        common_text.replace("TYPE_OF_BUILD_TO_CHANGE", "Sanitizer")
+    )
+    .expect("Failed save data to file");
 
     write!(file_godot_default, "{}", default_stage).expect("Failed save data to file");
     write!(file_godot_sanitizers, "{}", sanitizer_stage).expect("Failed save data to file");
@@ -148,12 +159,26 @@ jobs:
     for folder in good_directories {
         let project_name = folder[godot_project.len() + 1..].to_string();
         let mut new_text = text_to_change.replace("PROJECT_NAME", project_name.as_str());
+
         if excluded_items.iter().any(|e| *e == project_name) {
             new_text = new_text.replace('\n', "\n#");
         }
+        // else {
+        //     continue;
+        // }
 
-        write!(file_godot_default, "{}", new_text).expect("Failed save data to file");
-        write!(file_godot_sanitizers, "{}", new_text).expect("Failed save data to file");
+        write!(
+            file_godot_default,
+            "{}",
+            new_text.replace("TIMEOUT_TO_CHANGE", timeout_default)
+        )
+        .expect("Failed save data to file");
+        write!(
+            file_godot_sanitizers,
+            "{}",
+            new_text.replace("TIMEOUT_TO_CHANGE", timeout_sanitizers)
+        )
+        .expect("Failed save data to file");
 
         //print!("{}", new_text);
     }
