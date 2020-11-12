@@ -108,12 +108,13 @@ jobs:
           sudo apt-get install -y build-essential pkg-config libx11-dev libxcursor-dev \
             libxinerama-dev libgl1-mesa-dev libglu-dev libasound2-dev libpulse-dev libudev-dev libxi-dev libxrandr-dev yasm \
             git scons
-          git clone https://github.com/godotengine/godot.git
-          cd godot
+          git clone https://github.com/godotengine/godot.git godot-git
+          cd godot-git
           git checkout 3.2
           scons p=x11 target=debug use_asan=yes use_ubsan=yes -j2
           cd ..
-          mv godot/bin/godot.x11.tools.64s godot";
+          mv godot-git/bin/godot.x11.tools.64s godot
+          chmod +x ./godot";
 
     let text_to_change : &str = "
 
